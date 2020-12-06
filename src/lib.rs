@@ -1,4 +1,4 @@
-//! asdf
+//! Proof of concept for creating FFI-safe trait objects in Rust.
 
 #![deny(missing_docs)]
 
