@@ -1,11 +1,12 @@
+pub use crate::external::{new_file_handle_builder, FileHandleBuilder};
+
+use crate::FileHandle;
 use std::{
     ffi::CStr,
     fs::File,
     os::raw::{c_char, c_int},
     ptr,
 };
-
-use crate::FileHandle;
 
 /// Create a new [`FileHandle`] which throws away all data written to it.
 #[no_mangle]
@@ -44,6 +45,8 @@ pub unsafe extern "C" fn file_handle_destroy(handle: *mut FileHandle) {
 }
 
 /// Write some data to the file handle, returning the number of bytes written.
+///
+/// The return value is negative when writing fails.
 #[no_mangle]
 pub unsafe extern "C" fn file_handle_write(
     handle: *mut FileHandle,
@@ -55,18 +58,50 @@ pub unsafe extern "C" fn file_handle_write(
 
     match write(handle, data) {
         Ok(bytes_written) => bytes_written as c_int,
-        Err(e) => e.raw_os_error().unwrap_or(-1),
+        Err(e) => -e.raw_os_error().unwrap_or(1),
     }
 }
 
 /// Flush this output stream, ensuring that all intermediately buffered contents
 /// reach their destination.
+///
+/// Returns `0` on success or a negative value on failure.
 #[no_mangle]
 pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
     let flush = (*handle).flush;
 
     match flush(handle) {
         Ok(_) => 0,
-        Err(e) => e.raw_os_error().unwrap_or(-1),
+        Err(e) => -e.raw_os_error().unwrap_or(1),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Error, Write};
+
+    #[test]
+    fn detect_failed_write() {
+        struct DodgyWriter;
+        impl Write for DodgyWriter {
+            fn write(&mut self, _data: &[u8]) -> Result<usize, Error> {
+                Err(Error::from_raw_os_error(42))
+            }
+
+            fn flush(&mut self) -> Result<(), Error> {
+                Ok(())
+            }
+        }
+
+        unsafe {
+            let handle = FileHandle::for_writer(DodgyWriter);
+            let msg = "Hello, World!";
+
+            let ret = file_handle_write(handle, msg.as_ptr() as _, msg.len() as _);
+            assert_eq!(ret, -42);
+
+            file_handle_destroy(handle);
+        }
     }
 }

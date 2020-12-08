@@ -2,6 +2,7 @@
 
 #![deny(missing_docs)]
 
+mod external;
 mod ffi;
 mod file_handle;
 mod owned;
