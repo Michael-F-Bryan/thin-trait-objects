@@ -1,13 +1,25 @@
-use std::{any::TypeId, io::Write, ptr::NonNull};
-
 use crate::{file_handle::Repr, FileHandle};
+use std::{any::TypeId, io::Write, ptr::NonNull};
 
 /// An owned wrapper around a [`*mut FileHandle`][FileHandle] for use in Rust
 /// code.
 ///
-/// A [`FileHandle`] can be thought of as a `dyn Write`, which makes
-/// [`OwnedFileHandle`] the FFI-safe equivalent of `Box<dyn Write>`.
+/// A [`FileHandle`] can be thought of as a `dyn Write`, making
+/// [`OwnedFileHandle`] the FFI-safe equivalent of `Box<dyn Write>`. The primary
+/// difference is that an `OwnedFileHandle` is the size of a single pointer
+/// while `Box<dyn Write>` is a fat pointer that is twice the size.
+///
+/// ```rust
+/// # use std::{mem::size_of, io::Write};
+/// # use thin_trait_objects::OwnedFileHandle;
+/// assert_eq!(size_of::<OwnedFileHandle>(), size_of::<*mut u8>());
+/// assert_ne!(size_of::<Box<dyn Write>>(), size_of::<*mut u8>());
+///
+/// The "Null Pointer Optimisation" also holds
+/// assert_eq!(size_of::<Option<OwnedFileHandle>>(), size_of::<OwnedFileHandle>());
+/// ```
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct OwnedFileHandle(NonNull<FileHandle>);
 
 impl OwnedFileHandle {
@@ -22,6 +34,14 @@ impl OwnedFileHandle {
 
     /// Create an [`OwnedFileHandle`] from a `*mut FileHandle`, taking
     /// ownership of the [`FileHandle`].
+    ///
+    /// # Safety
+    ///
+    /// Ownership of the `handle` is given to the [`OwnedFileHandle`] and the
+    /// original pointer may no longer be used.
+    ///
+    /// The `handle` must be a non-null pointer which points to a valid
+    /// `FileHandle`.
     pub unsafe fn from_raw(handle: *mut FileHandle) -> Self {
         debug_assert!(!handle.is_null());
         OwnedFileHandle(NonNull::new_unchecked(handle))
@@ -105,18 +125,17 @@ impl Write for OwnedFileHandle {
 impl Drop for OwnedFileHandle {
     fn drop(&mut self) {
         unsafe {
-            crate::ffi::file_handle_destroy(self.0.as_ptr());
+            let ptr = self.0.as_mut();
+            (ptr.destroy)(ptr);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use crate::file_handle::tests::SharedBuffer;
-
     use super::*;
+    use crate::ffi::tests::SharedBuffer;
+    use std::sync::Arc;
 
     #[test]
     fn downcast_ref() {

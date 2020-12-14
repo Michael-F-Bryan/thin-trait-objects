@@ -124,8 +124,7 @@ unsafe fn flush_external_file_handle(handle: *mut FileHandle) -> Result<(), Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ffi::*;
-    use crate::file_handle::tests::SharedBuffer;
+    use crate::ffi::{tests::SharedBuffer, *};
     use std::io::Write;
 
     unsafe extern "C" fn destroy_data(data: *mut c_void) {

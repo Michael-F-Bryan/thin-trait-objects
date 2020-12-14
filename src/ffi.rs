@@ -23,9 +23,9 @@ pub unsafe extern "C" fn new_stdout_file_handle() -> *mut FileHandle {
 /// Create a new [`FileHandle`] which will write to a file on disk.
 #[no_mangle]
 pub unsafe extern "C" fn new_file_handle_from_path(path: *const c_char) -> *mut FileHandle {
-    let path = match CStr::from_ptr(path).to_str().ok() {
-        Some(p) => p,
-        None => return ptr::null_mut(),
+    let path = match CStr::from_ptr(path).to_str() {
+        Ok(p) => p,
+        Err(_) => return ptr::null_mut(),
     };
 
     let f = match File::create(path) {
@@ -77,9 +77,54 @@ pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use std::io::{Error, Write};
+    use std::sync::{Arc, Mutex};
+    use std::{
+        io::{Error, Write},
+        sync::atomic::{AtomicBool, Ordering},
+    };
+
+    struct NotifyOnDrop(Arc<AtomicBool>);
+
+    impl Drop for NotifyOnDrop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    impl Write for NotifyOnDrop {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            todo!()
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            todo!()
+        }
+    }
+
+    #[test]
+    fn writer_destructor_is_always_called() {
+        let was_dropped = Arc::new(AtomicBool::new(false));
+        let file_handle = FileHandle::for_writer(NotifyOnDrop(Arc::clone(&was_dropped)));
+        assert!(!file_handle.is_null());
+
+        unsafe {
+            file_handle_destroy(file_handle);
+        }
+
+        assert!(was_dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn create_null_file_handle_and_destroy_it() {
+        unsafe {
+            let handle = FileHandle::for_writer(std::io::sink());
+            assert!(!handle.is_null());
+
+            file_handle_destroy(handle);
+        }
+    }
 
     #[test]
     fn detect_failed_write() {
@@ -103,5 +148,42 @@ mod tests {
 
             file_handle_destroy(handle);
         }
+    }
+
+    #[derive(Debug, Clone, Default)]
+    pub(crate) struct SharedBuffer(pub(crate) Arc<Mutex<Vec<u8>>>);
+
+    impl Write for SharedBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.0.lock().unwrap().flush()
+        }
+    }
+
+    #[test]
+    fn write_to_shared_buffer() {
+        let msg = "Hello, World!";
+        let buffer = SharedBuffer::default();
+
+        unsafe {
+            let handle = FileHandle::for_writer(buffer.clone());
+            assert!(!handle.is_null());
+
+            let ret = file_handle_write(handle, msg.as_ptr() as *const _, msg.len() as _);
+            assert_eq!(ret, msg.len() as _);
+
+            let ret = file_handle_flush(handle);
+            assert_eq!(ret, 0);
+
+            file_handle_destroy(handle);
+        }
+
+        let written = buffer.0.lock().unwrap();
+        let got = String::from_utf8(written.clone()).unwrap();
+
+        assert_eq!(got, msg);
     }
 }
