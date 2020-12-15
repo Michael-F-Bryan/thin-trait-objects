@@ -31,7 +31,7 @@ impl FileHandle {
     /// Create a new [`FileHandle`] that wraps a Rust [`std::io::Write`]r.
     pub fn for_writer<W>(writer: W) -> *mut FileHandle
     where
-        W: Write + 'static,
+        W: Write + Send + Sync + 'static,
     {
         let repr = Repr {
             base: FileHandle::vtable::<W>(),

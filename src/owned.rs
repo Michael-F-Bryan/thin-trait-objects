@@ -24,7 +24,7 @@ pub struct OwnedFileHandle(NonNull<FileHandle>);
 
 impl OwnedFileHandle {
     /// Create a new [`OwnedFileHandle`] which wraps some [`Write`]r.
-    pub fn new<W: Write + 'static>(writer: W) -> Self {
+    pub fn new<W: Write + Send + Sync + 'static>(writer: W) -> Self {
         unsafe {
             let handle = FileHandle::for_writer(writer);
             assert!(!handle.is_null());
@@ -136,6 +136,11 @@ impl Drop for OwnedFileHandle {
         }
     }
 }
+
+// SAFETY: The FileHandle::for_writer() method ensure by construction that our
+// object is Send + Sync.
+unsafe impl Send for OwnedFileHandle {}
+unsafe impl Sync for OwnedFileHandle {}
 
 #[cfg(test)]
 mod tests {
