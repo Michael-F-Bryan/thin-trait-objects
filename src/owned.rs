@@ -57,7 +57,10 @@ impl OwnedFileHandle {
 
     /// Check if the object pointed to by a [`OwnedFileHandle`] has type `W`.
     pub fn is<W: 'static>(&self) -> bool {
-        unsafe { self.0.as_ref().type_id == TypeId::of::<W>() }
+        unsafe {
+            let ptr = self.0.as_ptr();
+            (*ptr).type_id == TypeId::of::<W>()
+        }
     }
 
     /// Returns a reference to the boxed value if it is of type `T`, or
@@ -109,15 +112,17 @@ impl OwnedFileHandle {
 impl Write for OwnedFileHandle {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         unsafe {
-            let ptr = self.0.as_mut();
-            (ptr.write)(ptr, buf)
+            let ptr = self.0.as_ptr();
+            let write = (*ptr).write;
+            (write)(ptr, buf)
         }
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         unsafe {
-            let ptr = self.0.as_mut();
-            (ptr.flush)(ptr)
+            let ptr = self.0.as_ptr();
+            let flush = (*ptr).flush;
+            (flush)(ptr)
         }
     }
 }
@@ -125,8 +130,9 @@ impl Write for OwnedFileHandle {
 impl Drop for OwnedFileHandle {
     fn drop(&mut self) {
         unsafe {
-            let ptr = self.0.as_mut();
-            (ptr.destroy)(ptr);
+            let ptr = self.0.as_ptr();
+            let destroy = (*ptr).destroy;
+            (destroy)(ptr)
         }
     }
 }
