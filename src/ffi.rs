@@ -5,7 +5,7 @@ use std::{
     ffi::CStr,
     fs::File,
     os::raw::{c_char, c_int},
-    ptr,
+    panic, ptr,
 };
 
 /// Create a new [`FileHandle`] which throws away all data written to it.
@@ -42,8 +42,10 @@ pub unsafe extern "C" fn new_file_handle_from_path(
 /// resources being used.
 #[no_mangle]
 pub unsafe extern "C" fn file_handle_destroy(handle: *mut FileHandle) {
-    let destructor = (*handle).destroy;
-    destructor(handle);
+    let _ = panic::catch_unwind(|| {
+        let destructor = (*handle).destroy;
+        destructor(handle);
+    });
 }
 
 /// Write some data to the file handle, returning the number of bytes written.
@@ -58,9 +60,10 @@ pub unsafe extern "C" fn file_handle_write(
     let write = (*handle).write;
     let data = std::slice::from_raw_parts(data as *const u8, len as usize);
 
-    match write(handle, data) {
-        Ok(bytes_written) => bytes_written as c_int,
-        Err(e) => -e.raw_os_error().unwrap_or(1),
+    match panic::catch_unwind(|| write(handle, data)) {
+        Ok(Ok(bytes_written)) => bytes_written as c_int,
+        Ok(Err(e)) => -e.raw_os_error().unwrap_or(1),
+        Err(_) => return -1,
     }
 }
 
@@ -72,9 +75,10 @@ pub unsafe extern "C" fn file_handle_write(
 pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
     let flush = (*handle).flush;
 
-    match flush(handle) {
-        Ok(_) => 0,
-        Err(e) => -e.raw_os_error().unwrap_or(1),
+    match panic::catch_unwind(|| flush(handle)) {
+        Ok(Ok(_)) => 0,
+        Ok(Err(e)) => -e.raw_os_error().unwrap_or(1),
+        Err(_) => -1,
     }
 }
 
