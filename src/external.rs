@@ -48,6 +48,7 @@ pub unsafe extern "C" fn new_file_handle_builder(
         base: FileHandle {
             layout: overall_layout,
             type_id: TypeId::of::<ExternalFileHandle>(),
+            poisoned: false,
             destroy: destroy_external_file_handle,
             write: write_external_file_handle,
             flush: flush_external_file_handle,

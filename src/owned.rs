@@ -146,7 +146,10 @@ unsafe impl Sync for OwnedFileHandle {}
 mod tests {
     use super::*;
     use crate::ffi::tests::SharedBuffer;
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
 
     #[test]
     fn downcast_ref() {
@@ -176,5 +179,54 @@ mod tests {
 
         let got = handle.downcast::<std::io::Sink>();
         assert!(got.is_ok());
+    }
+
+    #[derive(Debug)]
+    struct Panicking {
+        dropped: Arc<AtomicBool>,
+    }
+
+    impl Write for Panicking {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> { panic!() }
+
+        fn flush(&mut self) -> std::io::Result<()> { panic!() }
+    }
+
+    impl Drop for Panicking {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+
+            // Note: double-panic = abort
+            if !std::thread::panicking() {
+                panic!();
+            }
+        }
+    }
+
+    #[test]
+    fn owned_handle_poisons_on_panic() {
+        let was_dropped = Arc::new(AtomicBool::new(false));
+        let mut writer = OwnedFileHandle::new(Panicking {
+            dropped: Arc::clone(&was_dropped),
+        });
+
+        let got = write!(writer, "asdf");
+        assert!(got.is_err());
+
+        drop(writer);
+
+        assert!(
+            !was_dropped.load(Ordering::SeqCst),
+            "The destructor shouldn't have run"
+        );
+
+        // This isn't part of the test, but we need to manually decrement the
+        // arc's reference count so Miri's leak detector doesn't make this test
+        // fail when we deliberately wanted poisoned writers to be leaked.
+        unsafe {
+            let other_arc =
+                Arc::from_raw(Arc::as_ptr(&was_dropped) as *const _);
+            drop(other_arc);
+        }
     }
 }
