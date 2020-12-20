@@ -62,7 +62,7 @@ pub unsafe extern "C" fn new_file_handle_builder(
     // initialize their object
     FileHandleBuilder {
         file_handle: ptr.cast(),
-        place: ptr.cast::<u8>().offset(object_offset as isize).cast(),
+        place: ptr.cast::<u8>().add(object_offset).cast(),
     }
 }
 
@@ -76,8 +76,7 @@ struct ExternalFileHandle {
 }
 
 unsafe fn object_ptr(external: *mut ExternalFileHandle) -> *mut c_void {
-    (external as *mut u8).offset((*external).object_offset as isize)
-        as *mut c_void
+    (external as *mut u8).add((*external).object_offset) as *mut c_void
 }
 
 unsafe fn destroy_external_file_handle(handle: *mut FileHandle) {
