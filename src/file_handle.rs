@@ -67,7 +67,10 @@ unsafe fn destroy<W>(handle: *mut FileHandle) {
     let _ = Box::from_raw(repr);
 }
 
-unsafe fn write<W: Write>(handle: *mut FileHandle, data: &[u8]) -> Result<usize, Error> {
+unsafe fn write<W: Write>(
+    handle: *mut FileHandle,
+    data: &[u8],
+) -> Result<usize, Error> {
     let repr = &mut *(handle as *mut Repr<W>);
     repr.writer.write(data)
 }

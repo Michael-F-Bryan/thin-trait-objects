@@ -32,7 +32,8 @@ pub unsafe extern "C" fn new_file_handle_builder(
     let alignment = alignment.try_into().unwrap();
     let object_layout = Layout::from_size_align(size, alignment).unwrap();
 
-    let (overall_layout, object_offset) = header_layout.extend(object_layout).unwrap();
+    let (overall_layout, object_offset) =
+        header_layout.extend(object_layout).unwrap();
 
     // So this is a bit tricky. We're effectively trying to emulate
     // placement-new, but in Rust.
@@ -75,7 +76,8 @@ struct ExternalFileHandle {
 }
 
 unsafe fn object_ptr(external: *mut ExternalFileHandle) -> *mut c_void {
-    (external as *mut u8).offset((*external).object_offset as isize) as *mut c_void
+    (external as *mut u8).offset((*external).object_offset as isize)
+        as *mut c_void
 }
 
 unsafe fn destroy_external_file_handle(handle: *mut FileHandle) {
@@ -92,7 +94,10 @@ unsafe fn destroy_external_file_handle(handle: *mut FileHandle) {
     std::alloc::dealloc(external.cast(), (*external).base.layout);
 }
 
-unsafe fn write_external_file_handle(handle: *mut FileHandle, data: &[u8]) -> Result<usize, Error> {
+unsafe fn write_external_file_handle(
+    handle: *mut FileHandle,
+    data: &[u8],
+) -> Result<usize, Error> {
     let external = handle as *mut ExternalFileHandle;
     let write = (*external).write;
 
@@ -108,7 +113,9 @@ unsafe fn write_external_file_handle(handle: *mut FileHandle, data: &[u8]) -> Re
         Err(Error::from_raw_os_error(-ret))
     }
 }
-unsafe fn flush_external_file_handle(handle: *mut FileHandle) -> Result<(), Error> {
+unsafe fn flush_external_file_handle(
+    handle: *mut FileHandle,
+) -> Result<(), Error> {
     let external = handle as *mut ExternalFileHandle;
     let flush = (*external).flush;
 
@@ -131,8 +138,13 @@ mod tests {
         std::ptr::drop_in_place(data.cast::<SharedBuffer>());
     }
 
-    unsafe extern "C" fn write_data(data: *mut c_void, buffer: *const c_char, len: c_int) -> c_int {
-        let buffer = std::slice::from_raw_parts(buffer as *const u8, len as usize);
+    unsafe extern "C" fn write_data(
+        data: *mut c_void,
+        buffer: *const c_char,
+        len: c_int,
+    ) -> c_int {
+        let buffer =
+            std::slice::from_raw_parts(buffer as *const u8, len as usize);
 
         match data
             .cast::<SharedBuffer>()
@@ -186,7 +198,11 @@ mod tests {
             // our FileHandle is now initialized so we can write to it like
             // normal
             let msg = "Hello, World!";
-            let ret = file_handle_write(handle, msg.as_ptr() as *const _, msg.len() as _);
+            let ret = file_handle_write(
+                handle,
+                msg.as_ptr() as *const _,
+                msg.len() as _,
+            );
             assert_eq!(ret, 13);
 
             let ret = file_handle_flush(handle);

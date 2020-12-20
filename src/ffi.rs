@@ -22,7 +22,9 @@ pub unsafe extern "C" fn new_stdout_file_handle() -> *mut FileHandle {
 
 /// Create a new [`FileHandle`] which will write to a file on disk.
 #[no_mangle]
-pub unsafe extern "C" fn new_file_handle_from_path(path: *const c_char) -> *mut FileHandle {
+pub unsafe extern "C" fn new_file_handle_from_path(
+    path: *const c_char,
+) -> *mut FileHandle {
     let path = match CStr::from_ptr(path).to_str() {
         Ok(p) => p,
         Err(_) => return ptr::null_mut(),
@@ -79,34 +81,31 @@ pub unsafe extern "C" fn file_handle_flush(handle: *mut FileHandle) -> c_int {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
     use std::{
         io::{Error, Write},
-        sync::atomic::{AtomicBool, Ordering},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, Mutex,
+        },
     };
 
     struct NotifyOnDrop(Arc<AtomicBool>);
 
     impl Drop for NotifyOnDrop {
-        fn drop(&mut self) {
-            self.0.store(true, Ordering::SeqCst);
-        }
+        fn drop(&mut self) { self.0.store(true, Ordering::SeqCst); }
     }
 
     impl Write for NotifyOnDrop {
-        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
-            todo!()
-        }
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> { todo!() }
 
-        fn flush(&mut self) -> std::io::Result<()> {
-            todo!()
-        }
+        fn flush(&mut self) -> std::io::Result<()> { todo!() }
     }
 
     #[test]
     fn writer_destructor_is_always_called() {
         let was_dropped = Arc::new(AtomicBool::new(false));
-        let file_handle = FileHandle::for_writer(NotifyOnDrop(Arc::clone(&was_dropped)));
+        let file_handle =
+            FileHandle::for_writer(NotifyOnDrop(Arc::clone(&was_dropped)));
         assert!(!file_handle.is_null());
 
         unsafe {
@@ -134,16 +133,15 @@ pub(crate) mod tests {
                 Err(Error::from_raw_os_error(42))
             }
 
-            fn flush(&mut self) -> Result<(), Error> {
-                Ok(())
-            }
+            fn flush(&mut self) -> Result<(), Error> { Ok(()) }
         }
 
         unsafe {
             let handle = FileHandle::for_writer(DodgyWriter);
             let msg = "Hello, World!";
 
-            let ret = file_handle_write(handle, msg.as_ptr() as _, msg.len() as _);
+            let ret =
+                file_handle_write(handle, msg.as_ptr() as _, msg.len() as _);
             assert_eq!(ret, -42);
 
             file_handle_destroy(handle);
@@ -172,7 +170,11 @@ pub(crate) mod tests {
             let handle = FileHandle::for_writer(buffer.clone());
             assert!(!handle.is_null());
 
-            let ret = file_handle_write(handle, msg.as_ptr() as *const _, msg.len() as _);
+            let ret = file_handle_write(
+                handle,
+                msg.as_ptr() as *const _,
+                msg.len() as _,
+            );
             assert_eq!(ret, msg.len() as _);
 
             let ret = file_handle_flush(handle);
