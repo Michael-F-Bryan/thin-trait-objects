@@ -15,7 +15,7 @@ use std::{any::TypeId, io::Write, ptr::NonNull};
 /// assert_eq!(size_of::<OwnedFileHandle>(), size_of::<*mut u8>());
 /// assert_ne!(size_of::<Box<dyn Write>>(), size_of::<*mut u8>());
 ///
-/// The "Null Pointer Optimisation" also holds
+/// // The "Null Pointer Optimisation" also holds
 /// assert_eq!(size_of::<Option<OwnedFileHandle>>(), size_of::<OwnedFileHandle>());
 /// ```
 #[derive(Debug)]
