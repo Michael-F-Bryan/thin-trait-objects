@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["thin_trait_objects"] = [{"text":"impl Freeze for FileHandleBuilder","synthetic":true,"types":[]},{"text":"impl Freeze for FileHandle","synthetic":true,"types":[]},{"text":"impl Freeze for OwnedFileHandle","synthetic":true,"types":[]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
